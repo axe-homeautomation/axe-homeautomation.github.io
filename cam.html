@@ -1,0 +1,343 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Live Camera</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body {
+      height: 100%;
+      overflow: hidden;
+      background: #000;
+      color: #fff;
+      font-family: system-ui, sans-serif;
+    }
+    .video-wrap {
+      position: fixed;
+      inset: 0;
+      background: #000;
+    }
+    .video-wrap video {
+      display: block;
+      width: 100%;
+      height: 100%;
+      object-fit: contain;
+    }
+    .status-overlay {
+      position: absolute;
+      top: 12px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 3;
+      font-size: 0.85rem;
+      opacity: 0.92;
+      padding: 6px 12px;
+      background: rgba(0, 0, 0, 0.55);
+      border-radius: 6px;
+      pointer-events: none;
+      max-width: min(90vw, 28rem);
+      text-align: center;
+    }
+    .status-overlay:empty { display: none; }
+    .camera-label {
+      position: absolute;
+      bottom: 10px;
+      left: 10px;
+      z-index: 2;
+      padding: 4px 10px;
+      font-size: 0.75rem;
+      font-weight: 600;
+      text-transform: capitalize;
+      color: #fff;
+      background: rgba(0, 0, 0, 0.72);
+      border-radius: 4px;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+      pointer-events: none;
+    }
+    .live-badge {
+      position: absolute;
+      bottom: 10px;
+      right: 10px;
+      z-index: 2;
+      padding: 4px 10px;
+      font-size: 0.75rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+      color: #fff;
+      background: rgba(34, 160, 72, 0.92);
+      border-radius: 4px;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+      pointer-events: none;
+    }
+    .live-badge[hidden] { display: none !important; }
+    .error-overlay {
+      position: fixed;
+      left: 50%;
+      top: 50%;
+      transform: translate(-50%, -50%);
+      z-index: 10;
+      max-width: min(90vw, 24rem);
+      padding: 12px 16px;
+      font-size: 0.95rem;
+      color: #fff;
+      background: rgba(192, 57, 43, 0.95);
+      border-radius: 8px;
+      text-align: center;
+      box-shadow: 0 4px 24px rgba(0, 0, 0, 0.5);
+    }
+    .error-overlay:empty { display: none; }
+  </style>
+</head>
+<body>
+  <div class="video-wrap">
+    <video id="video" autoplay playsinline muted></video>
+    <div id="status" class="status-overlay" aria-live="polite"></div>
+    <div id="camera-label" class="camera-label">Connecting…</div>
+    <div id="live-badge" class="live-badge" hidden>LIVE</div>
+  </div>
+  <p id="error" class="error-overlay" role="alert"></p>
+
+  <script type="module">
+    import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-app.js";
+    import { getAuth, signInWithCustomToken, onIdTokenChanged } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-auth.js";
+    import { getDatabase, ref, set, push, get, onValue, onChildAdded } from "https://www.gstatic.com/firebasejs/10.14.0/firebase-database.js";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyAb8oDexjfpMcSE0TpgGmnrwxrJhllA2og",
+      authDomain: "axe-home-automation.firebaseapp.com",
+      projectId: "axe-home-automation",
+      storageBucket: "axe-home-automation.appspot.com",
+      messagingSenderId: "73961261576",
+      appId: "1:73961261576:web:c4268b3e7d5e82d88b5fbd",
+      databaseURL: "https://axe-home-automation-default-rtdb.firebaseio.com",
+    };
+
+    const debug = new URLSearchParams(location.search).get("debug") === "true";
+    const enc = location.hash.slice(1);
+    const token = enc ? atob(enc.replace(/-/g, "+").replace(/_/g, "/")) : null;
+    let nonce = null;
+
+    const $status = document.getElementById("status");
+    const $cameraLabel = document.getElementById("camera-label");
+    const $video = document.getElementById("video");
+    const $error = document.getElementById("error");
+    const $liveBadge = document.getElementById("live-badge");
+
+    let cachedIdToken = "";
+    let unloadBeaconSent = false;
+    let pc = null;
+    let db = null;
+    let firebaseApp = null;
+
+    const setStatus = msg => { $status.textContent = msg; };
+    const showError = msg => { $error.textContent = msg; setStatus(""); setLiveUi(false); };
+
+    const setLiveUi = live => {
+      $liveBadge.hidden = !live;
+      if (live) $status.textContent = "";
+    };
+
+    const LOG = debug
+      ? (...a) =>
+          console.log(
+            "[cam/webrtc]",
+            ...a.map(x => {
+              if (x != null && typeof x === "object" && !(x instanceof Error)) {
+                try { return JSON.stringify(x); } catch { return String(x); }
+              }
+              return x;
+            })
+          )
+      : () => {};
+
+    function sendUnloadBeacon() {
+      if (unloadBeaconSent || !cachedIdToken) return;
+      unloadBeaconSent = true;
+      const url = new URL("/api/webrtc/end", location.origin).href;
+      const body = JSON.stringify({ idToken: cachedIdToken });
+      const ok = navigator.sendBeacon(url, new Blob([body], { type: "application/json" }));
+      LOG("pagehide sendBeacon", ok);
+      try { pc?.close(); } catch { /* ignore */ }
+    }
+
+    if (!token) {
+      LOG("abort — missing token in URL hash");
+      showError("Missing token in URL.");
+    } else {
+      window.addEventListener("pagehide", sendUnloadBeacon, { capture: true });
+      main().catch(e => {
+        LOG("fatal", e.message || e);
+        showError(e.message || String(e));
+      });
+    }
+
+    async function main() {
+      LOG("start", { token: enc.slice(0, 8) + "…" });
+      firebaseApp = initializeApp(firebaseConfig);
+      const auth = getAuth(firebaseApp);
+      db = getDatabase(firebaseApp);
+
+      setStatus("Authenticating…");
+      LOG("Firebase auth…");
+      await signInWithCustomToken(auth, token);
+      nonce = auth.currentUser.uid;
+      cachedIdToken = await auth.currentUser.getIdToken();
+      onIdTokenChanged(auth, user => {
+        if (user) user.getIdToken().then(t => { cachedIdToken = t; }).catch(() => {});
+      });
+      LOG("Firebase auth OK");
+
+      setStatus("Waiting for offer…");
+      LOG("wait RTDB offer…");
+      const { iceServers, offer, cameraName } = await waitForOffer();
+      LOG("offer received", {
+        cameraName,
+        iceServerCount: Array.isArray(iceServers) ? iceServers.length : 0,
+        offerType: offer?.type,
+        sdpChars: offer?.sdp?.length ?? 0,
+      });
+      $cameraLabel.textContent = cameraName;
+
+      setStatus("Connecting…");
+      LOG("create RTCPeerConnection");
+      pc = new RTCPeerConnection({ iceServers });
+      if (debug) window.__liveCamPc = pc;
+
+      if (debug) {
+        pc.onconnectionstatechange = () => LOG("pc.connectionState →", pc.connectionState);
+        pc.onsignalingstatechange = () => LOG("pc.signalingState →", pc.signalingState);
+        pc.onicegatheringstatechange = () => LOG("pc.iceGatheringState →", pc.iceGatheringState);
+      }
+
+      pc.ontrack = e => {
+        const t = e.track;
+        const stream = e.streams[0] ?? new MediaStream([t]);
+        LOG("ontrack", {
+          kind: t.kind,
+          trackId: t.id,
+          streamId: stream.id,
+          usedSyntheticStream: !e.streams[0],
+        });
+        $video.srcObject = stream;
+        setLiveUi(true);
+        t.onended = () => LOG("track ended", t.kind, t.id);
+        if (debug) {
+          $video.onloadedmetadata = () => {
+            LOG("video metadata", {
+              videoWidth: $video.videoWidth,
+              videoHeight: $video.videoHeight,
+              readyState: $video.readyState,
+            });
+          };
+          $video.play().then(() => LOG("video.play ok")).catch(err => LOG("video.play failed", err?.message || err));
+        } else {
+          $video.play().catch(() => {});
+        }
+      };
+
+      pc.ondatachannel = e => {
+        LOG("datachannel", e.channel.label);
+        e.channel.onmessage = m => {
+          LOG("datachannel msg", m.data);
+          $cameraLabel.textContent = m.data;
+        };
+      };
+
+      pc.oniceconnectionstatechange = () => {
+        const s = pc.iceConnectionState;
+        LOG("iceConnectionState", s);
+        if (s === "connected" || s === "completed") setLiveUi(true);
+        else if (s === "failed") {
+          LOG("ICE failed");
+          showError("Connection lost.");
+          teardownLocal();
+        }
+      };
+
+      let clientCandSent = 0;
+      pc.onicecandidate = ({ candidate }) => {
+        if (candidate) {
+          clientCandSent++;
+          push(ref(db, `webrtc-sessions/${nonce}/clientCandidates`), {
+            candidate: candidate.candidate, sdpMid: candidate.sdpMid, sdpMLineIndex: candidate.sdpMLineIndex,
+          });
+        } else {
+          LOG("ICE gather done; client candidates sent:", clientCandSent);
+        }
+      };
+
+      LOG("setRemoteDescription (offer)…");
+      await pc.setRemoteDescription(offer);
+      LOG("setRemoteDescription OK");
+
+      for (const tr of pc.getTransceivers()) {
+        if (tr?.receiver?.track?.kind === "video") {
+          try {
+            tr.direction = "recvonly";
+            LOG("video transceiver recvonly", { mid: tr.mid });
+          } catch (e) {
+            LOG("transceiver recvonly skip", e?.message || e);
+          }
+        }
+      }
+
+      const serverCandsRef = ref(db, `webrtc-sessions/${nonce}/serverCandidates`);
+      const serverSnap = await get(serverCandsRef);
+      let serverBuffered = 0;
+      if (serverSnap.exists()) {
+        serverSnap.forEach(s => {
+          const c = s.val();
+          if (c) {
+            serverBuffered++;
+            pc.addIceCandidate(c).catch(err => LOG("addIceCandidate buffered", err?.message || err));
+          }
+        });
+      }
+      LOG("server ICE from snapshot:", serverBuffered);
+
+      onChildAdded(serverCandsRef, snap => {
+        const c = snap.val();
+        if (c) {
+          pc.addIceCandidate(c).catch(err => LOG("addIceCandidate trickle", err?.message || err));
+        }
+      });
+
+      LOG("createAnswer + publish…");
+      const answer = await pc.createAnswer();
+      await pc.setLocalDescription(answer);
+      await set(ref(db, `webrtc-sessions/${nonce}/answer`), { sdp: answer.sdp, type: answer.type });
+      LOG("answer in RTDB, sdpChars=", answer.sdp?.length ?? 0);
+      LOG("signaling done; waiting for media");
+    }
+
+    function waitForOffer() {
+      return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+          off();
+          LOG("timeout waiting for offer (30s)");
+          reject(new Error("Timed out waiting for offer."));
+        }, 30000);
+        const off = onValue(ref(db, `webrtc-sessions/${nonce}`), snap => {
+          const val = snap.val();
+          if (val?.offer) {
+            clearTimeout(timer);
+            off();
+            resolve(val);
+          }
+        });
+      });
+    }
+
+    function teardownLocal() {
+      sendUnloadBeacon();
+      $video.srcObject?.getTracks().forEach(t => t.stop());
+      $video.srcObject = null;
+      try { pc?.close(); } catch { /* ignore */ }
+      pc = null;
+      try { delete window.__liveCamPc; } catch { /* ignore */ }
+      setLiveUi(false);
+    }
+  </script>
+</body>
+</html>
