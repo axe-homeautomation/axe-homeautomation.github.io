@@ -124,11 +124,11 @@
     const $error = document.getElementById("error");
     const $liveBadge = document.getElementById("live-badge");
 
-    let cachedIdToken = "";
-    let unloadBeaconSent = false;
     let pc = null;
     let db = null;
     let firebaseApp = null;
+    let cachedIdToken = "";
+    let unloadBeaconSent = false;
 
     const setStatus = msg => { $status.textContent = msg; };
     const showError = msg => { $error.textContent = msg; setStatus(""); setLiveUi(false); };
@@ -154,18 +154,17 @@
     function sendUnloadBeacon() {
       if (unloadBeaconSent || !cachedIdToken) return;
       unloadBeaconSent = true;
-      const url = new URL("/api/webrtc/end", location.origin).href;
+      const url = new URL("/api/misc/webrtc/end", location.origin).href;
       const body = JSON.stringify({ idToken: cachedIdToken });
       const ok = navigator.sendBeacon(url, new Blob([body], { type: "application/json" }));
-      LOG("pagehide sendBeacon", ok);
-      try { pc?.close(); } catch { /* ignore */ }
+      LOG("sendBeacon", ok);
     }
 
     if (!token) {
       LOG("abort — missing token in URL hash");
       showError("Missing token in URL.");
     } else {
-      window.addEventListener("pagehide", sendUnloadBeacon, { capture: true });
+      window.addEventListener("pagehide", teardownLocal, { capture: true });
       main().catch(e => {
         LOG("fatal", e.message || e);
         showError(e.message || String(e));
