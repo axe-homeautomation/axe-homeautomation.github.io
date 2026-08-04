@@ -23,8 +23,17 @@
     <button id="set_redirect">Set Redirect URL</button>
     <button id="cancel_timer">Cancel Redirect</button>
   </div>
+  <div id="code-section" style="display:none; margin-top: 2em;">
+    <h2>Authorization Code</h2>
+    <div style="display:flex; justify-content:center; align-items:center; gap: 0.5em; flex-wrap: wrap;">
+      <input id="code-box" type="text" readonly
+        style="font-family: monospace; font-size: 1em; padding: 0.6em; width: min(90vw, 480px); box-sizing: border-box;" />
+      <button id="copy-code">Copy</button>
+    </div>
+  </div>
   <script type="text/javascript">
     var redirect = window.localStorage['redirect_page'];
+    var code = new URLSearchParams(window.location.search).get('code');
     var time = 5;
     var timerEl = document.getElementById("timer");
     var timer = null;
@@ -32,13 +41,18 @@
       document.getElementById("redirect").style.display = "none";
     } else {
       document.getElementById("destination").innerText = redirect + window.location.search
-      var timer = window.setInterval(function() {
-        timerEl.innerText = "Redirecting in " + time--;
-        if (time < 0) {
-          window.clearInterval(timer);
-          window.location.href = redirect + window.location.search; 
-        }
-      }, 1000)
+      if (!code) {
+        // Only auto-redirect when there's no code on screen for the user to copy.
+        var timer = window.setInterval(function() {
+          timerEl.innerText = "Redirecting in " + time--;
+          if (time < 0) {
+            window.clearInterval(timer);
+            window.location.href = redirect + window.location.search;
+          }
+        }, 1000)
+      } else {
+        timerEl.innerText = "Redirect paused (code available below)";
+      }
     }
     document.getElementById("cancel_timer").addEventListener("click", function() {
       timerEl.innerText = "Redirect cancelled";
@@ -51,6 +65,38 @@
         window.location.reload()
       }
     });
+
+    if (code) {
+      var codeSection = document.getElementById("code-section");
+      var codeBox = document.getElementById("code-box");
+      var copyButton = document.getElementById("copy-code");
+      codeBox.value = code;
+      codeSection.style.display = "block";
+
+      codeBox.addEventListener("click", function() {
+        codeBox.select();
+        codeBox.setSelectionRange(0, 99999);
+      });
+
+      copyButton.addEventListener("click", function() {
+        codeBox.select();
+        codeBox.setSelectionRange(0, 99999);
+        var showCopied = function() {
+          var original = copyButton.innerText;
+          copyButton.innerText = "Copied!";
+          window.setTimeout(function() { copyButton.innerText = original; }, 1500);
+        };
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          navigator.clipboard.writeText(code).then(showCopied, function() {
+            document.execCommand("copy");
+            showCopied();
+          });
+        } else {
+          document.execCommand("copy");
+          showCopied();
+        }
+      });
+    }
   </script>
   </body>
 </html>
