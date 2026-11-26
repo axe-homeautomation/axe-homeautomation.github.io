@@ -1,3 +1,207 @@
-<center>
-  <h1>Development Environment</h1>
-</center>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Home Automation — Smart Devices in One Place</title>
+<style>
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    background: #0d1117;
+    color: #c9d1d9;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+  }
+
+  /* --- Header / Hero --- */
+  header {
+    width: 100%;
+    padding: 80px 24px 60px;
+    text-align: center;
+    background: linear-gradient(180deg, #161b22 0%, transparent 100%),
+                radial-gradient(ellipse at 50% 0%, #1a3a5c 0%, transparent 70%);
+  }
+  .badge {
+    display: inline-block;
+    padding: 4px 16px;
+    border-radius: 999px;
+    background: rgba(56, 139, 253, 0.15);
+    border: 1px solid rgba(56, 139, 253, 0.3);
+    color: #58a6ff;
+    font-size: 13px;
+    letter-spacing: 0.5px;
+    margin-bottom: 24px;
+  }
+  header h1 {
+    font-size: clamp(32px, 5vw, 56px);
+    font-weight: 700;
+    color: #f0f6fc;
+    line-height: 1.15;
+    margin-bottom: 16px;
+    letter-spacing: -1px;
+  }
+  header p {
+    max-width: 600px;
+    margin: 0 auto;
+    font-size: 18px;
+    line-height: 1.7;
+    color: #8b949e;
+  }
+
+  /* --- Stats bar --- */
+  .stats {
+    display: flex;
+    gap: 48px;
+    justify-content: center;
+    flex-wrap: wrap;
+    padding: 40px 24px;
+  }
+  .stat { text-align: center; }
+  .stat-value {
+    font-size: 36px;
+    font-weight: 700;
+    color: #58a6ff;
+  }
+  .stat-label {
+    margin-top: 4px;
+    font-size: 13px;
+    color: #8b949e;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+
+  /* --- Section titles --- */
+  section { width: 100%; max-width: 960px; padding: 24px 24px 60px; }
+  .section-title {
+    font-size: 26px;
+    font-weight: 600;
+    color: #f0f6fc;
+    margin-bottom: 32px;
+    text-align: center;
+  }
+
+  /* --- Cards grid --- */
+  .cards {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+    gap: 20px;
+  }
+  .card {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 12px;
+    padding: 32px 28px;
+    transition: border-color 0.2s;
+  }
+  .card:hover { border-color: #58a6ff; }
+  .card-icon {
+    font-size: 32px;
+    margin-bottom: 16px;
+    display: block;
+  }
+  .card h3 {
+    font-size: 18px;
+    font-weight: 600;
+    color: #f0f6fc;
+    margin-bottom: 8px;
+  }
+  .card p {
+    font-size: 14px;
+    line-height: 1.65;
+    color: #8b949e;
+  }
+
+  /* --- Rooms section --- */
+  .rooms {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: 16px;
+  }
+  .room {
+    background: #161b22;
+    border: 1px solid #30363d;
+    border-radius: 10px;
+    padding: 20px 20px 18px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+  }
+  .room-icon { font-size: 24px; flex-shrink: 0; }
+  .room-name { color: #f0f6fc; font-weight: 500; font-size: 14px; }
+  .room-devices { color: #8b949e; font-size: 12px; margin-top: 2px; }
+
+  /* --- Footer --- */
+  footer {
+    padding: 40px 24px;
+    text-align: center;
+    font-size: 13px;
+    color: #484f58;
+    border-top: 1px solid #21262d;
+    width: 100%;
+    margin-top: auto;
+  }
+
+  @media (max-width: 480px) {
+    .stats { gap: 32px; }
+    .stat-value { font-size: 28px; }
+  }
+</style>
+</head>
+<body>
+
+  <header>
+    <span class="badge">&#9679;&nbsp; Home Automation Platform</span>
+    <h1>Smart Home Management,<br>Simplified.</h1>
+    <p>A unified platform that brings together every device, sensor, and service in your home — all managed from one place.</p>
+  </header>
+
+  <div class="stats">
+    <div class="stat">
+      <div class="stat-value" style="color:#3fb950;">&#9679;&nbsp;Online</div>
+      <div class="stat-label">System Status</div>
+    </div>
+    <div class="stat">
+      <div class="stat-value">All Systems<br><span style="font-size:24px;">Operational</span></div>
+      <div class="stat-label">Health</div>
+    </div>
+  </div>
+
+  <section>
+    <h2 class="section-title">Centralizing Smart Home Automation</h2>
+    <p style="text-align:center; max-width:640px; margin:0 auto 36px; font-size:16px; line-height:1.7; color:#8b949e;">
+      Managing dozens of smart devices from different manufacturers often means juggling half a dozen apps, fragmented interfaces, and inconsistent experiences. This platform brings everything together into a single unified system — automating, monitoring, and controlling all your smart devices in one place.
+    </p>
+    <div class="cards">
+      <div class="card">
+        <span class="card-icon">&#128269;</span>
+        <h3>Unified Control</h3>
+        <p>All smart devices, regardless of brand or protocol, accessible from a single interface. No more juggling multiple apps.</p>
+      </div>
+      <div class="card">
+        <span class="card-icon">&#128200;</span>
+        <h3>Smart Automation</h3>
+        <p>Build automated routines that trigger based on time, conditions, and events — keeping your home working for you.</p>
+      </div>
+      <div class="card">
+        <span class="card-icon">&#129727;</span>
+        <h3>Device Discovery</h3>
+        <p>Automatically detects and integrates new devices as they connect, growing seamlessly with your smart home.</p>
+      </div>
+      <div class="card">
+        <span class="card-icon">&#9881;</span>
+        <h3>Integrated Ecosystem</h3>
+        <p>Connects across protocols and platforms so devices from different manufacturers work together as one cohesive system.</p>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    Home Automation &mdash; Smart devices, managed in one place.
+  </footer>
+
+</body>
+</html>
